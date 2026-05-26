@@ -1068,8 +1068,14 @@ sp; if => //.
 sp; match; 1,2,4,5: by auto.
 sp; if => //.
 auto => />.
-move => &m smai uniq_pi ss_log_ip ss_log_rp ss_log_acc ss_log_obs sk_obs ai_in obs_ps k n _.
-do! split; ~5,6: smt(get_setE).
+move => &m smai uniq_pi ss_log_ip ss_log_rp ss_log_acc ss_log_obs sk_obs ai_in obs_ps _ k _.
+do! split; ~1,5,6: smt(get_setE).
++ move => c r h st h' st'.
+  rewrite get_set_sameE !get_setE oget_some.
+  have := uniq_pi (oget (uniq_msg r (Observed t k)){!m}) r h{!m}.
+  case (h = h{!m}); first smt().
+  case (h' = h{!m}); first smt().
+  by move=> _ _ _ /#.
 + move => a0 i0 r b m1 m2 m3 sk.
   rewrite get_setE.
   by case ((a0, i0) = h{m}) => /#.
@@ -1090,8 +1096,14 @@ sp; if => //.
 case (Game5c.b0).
 + rcondf ^if; 1: by auto => />.
   auto => />.
-  move => &m sm smai uniq_pi ss_log_ip ss_log_rp ss_log_acc ss_log_obs sk_obs ai_in obs_ps _ k _ k' _.
-  do! split; ~5,6: smt(get_setE).
+  move => &m sm uniq_pi ss_log_ip ss_log_rp ss_log_acc ss_log_obs sk_obs ai_in obs_ps _ _ k _ k' _.
+  do! split; ~1,5,6: smt(get_setE).
+  + move => c r h st h' st'.
+    rewrite !get_setE.
+    have := uniq_pi (oget (uniq_msg r (Observed t k)){!m}) r h{!m}.
+    case (h = h{!m}); first smt().
+    case (h' = h{!m}); first smt().
+    by move=> _ _ _ /#.
   + move => a0 i0 r b m1 m2 m3 sk.
     rewrite get_setE.
     by case ((a0, i0) = h{m}) => /#.
@@ -1100,8 +1112,14 @@ case (Game5c.b0).
   case; smt(get_setE).
 rcondt ^if; 1: by auto => />.
 auto => />.
-move => &m sm smai uniq_pi ss_log_ip ss_log_rp ss_log_acc ss_log_obs sk_obs ai_in obs_ps _ k _.
-do! split; ~5,6: smt(get_setE).
+move => &m smai uniq_pi ss_log_ip ss_log_rp ss_log_acc ss_log_obs sk_obs ai_in _ obs_ps _ k _.
+do! split; ~1,5,6: smt(get_setE).
++ move => c r h st h' st'.
+  rewrite get_set_sameE !get_setE oget_some.
+  have := uniq_pi (oget (uniq_msg r (Observed t k)){!m}) r h{!m}.
+  case (h = h{!m}); first smt().
+  case (h' = h{!m}); first smt().
+  by move=> _ _ _ /#.
 + move => a0 i0 r b m1 m2 m3 sk.
   rewrite get_setE.
   by case ((a0, i0) = h{m}) => /#.

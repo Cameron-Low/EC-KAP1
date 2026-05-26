@@ -2009,8 +2009,12 @@ call (: ={state_map, psk_map, b0, dec_map, bad, prfkey_map, key_map}(Game5b, Gam
   move => /(sk_obs tr) [a' i' r sk smai'].
   have smai : Game5c.state_map.[h]{2} = Some (r{!2}, Accepted tr k') by smt().
   case (r = r{!2}).
-  + have := uniq_pi tr.`1.`2 r h{2} (Accepted tr k') (a', i') (Observed tr sk).
-    smt().
+  + move=> <<-.
+    have := uniq_pi (oget (uniq_msg r (Accepted tr k'))) r h{2} (Accepted tr k') (a', i') (Observed tr sk).
+    rewrite smai smai' /=.
+    move: smai smai'.
+    clear smai2.
+    by case r=> /=; case (h{2} = (a', i'))=> /> ->.
   move => neq_role.
   have bj_partner : (a', i') \in partners h{2} Game5c.state_map{2}.
   + by rewrite /get_partners mem_fdom mem_filter domE smai' smai /= eq_sym.
@@ -2039,8 +2043,12 @@ call (: ={state_map, psk_map, b0, dec_map, bad, prfkey_map, key_map}(Game5b, Gam
   move => /(sk_obs tr) [a' i' r sk smai'].
   have smai : Game5c.state_map.[h]{2} = Some (r{!2}, Accepted tr k') by smt().
   case (r = r{!2}).
-  + have := uniq_pi tr.`1.`2 r h{2} (Accepted tr k') (a', i') (Observed tr sk).
-    smt().
+  + move=> <<-.
+    have := uniq_pi (oget (uniq_msg r (Accepted tr k'))) r h{2} (Accepted tr k') (a', i') (Observed tr sk).
+    rewrite smai smai' /=.
+    move: smai smai'.
+    clear smai2.
+    by case r=> /=; case (h{2} = (a', i'))=> /> ->.
   move => neq_role.
   have bj_partner : (a', i') \in partners h{2} Game5c.state_map{2}.
   + by rewrite /get_partners mem_fdom mem_filter domE smai' smai /= eq_sym.
@@ -2073,7 +2081,10 @@ call (: ={state_map, psk_map, dec_map, bad, prfkey_map}(Game5c, Game5c)
   move=> tr k'.
   if => //.
   auto => />.
-  smt(get_setE).
+  move=> &1 &2 <- /> _ _ inv _ _ _ k _.
+  rewrite !get_set_sameE /=.
+  move=> h.
+  by rewrite !mem_set inv.
 
 + proc; inline*.
   sp; if => //.
@@ -2084,7 +2095,10 @@ call (: ={state_map, psk_map, dec_map, bad, prfkey_map}(Game5c, Game5c)
   rcondt{1} ^if; 1: by auto => />.
   rcondf{2} ^if; 1: by auto => />.
   auto => />.
-  smt(get_setE).
+  move=> &1 &2 <- /> _ _ inv _ _ _ k _ k'' _.
+  rewrite !get_set_sameE /=.
+  move=> h.
+  by rewrite !mem_set inv.
 
 by auto => />.
 qed.
