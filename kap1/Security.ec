@@ -1,6 +1,6 @@
 require import AllCore FSet FMap List Distr DProd PROM KAP1 Games.
-import AKEc AEADc PRFc.
-require Birthday.
+require (*  *) StdBigop StdOrder.
+(*   *) import AKEc AEADc PRFc StdBigop.Bigreal.BRA StdOrder.RealOrder.
 
 (* ------------------------------------------------------------------------------------------ *)
 (* Reductions *)
@@ -136,25 +136,20 @@ module (PRF_Reduction (D : AKE_Adversary) : PRF_Adversary) (O : PRF_Oracles) = {
 }.
 
 (* ------------------------------------------------------------------------------------------ *)
-(* Ciphertext Collision Reduction *)
+(* Query Counting *)
 
 op q_m1 : { int | 0 <= q_m1 } as ge0_q_m1.
 op q_m2 : { int | 0 <= q_m2 } as ge0_q_m2.
 op q_m3 : { int | 0 <= q_m3 } as ge0_q_m3.
-clone Birthday as BD with
-  type T <- ctxt,
-  op uT <- dctxt,
-  op q <- q_m1 + q_m2 + q_m3
-  proof*.
-realize ge0_q by smt(ge0_q_m1 ge0_q_m2 ge0_q_m3).
 
-module Counter (O : AKE_Oracles) : AKE_Oracles_i = {
+module Counter (O : AKE_Oracles_i) : AKE_Oracles_i = {
   var cm1, cm2, cm3 : int
 
   include O[send_fin, gen_pskey, test, reveal]
 
   proc init_mem(b: bool) = {
     (cm1, cm2, cm3) <- (0, 0, 0);
+    O.init_mem(b);
   }
 
   proc send_msg1(x) = {
@@ -174,28 +169,6 @@ module Counter (O : AKE_Oracles) : AKE_Oracles_i = {
     cm3 <- cm3 + 1;
     m <@ O.send_msg3(x);
     return m;
-  }
-}.
-
-module Collision_Reduction_Oracles (O : BD.ASampler) = Game2 with {
-  proc send_msg1 [ ^if.^ca<$ ~ { ca <@ O.s(); } ]
-  proc send_msg2 [ ^if.^match#Some.^cb<$ ~ { cb <@ O.s(); } ]
-  proc send_msg3 [ ^if.^match#IPending.^match#Some.^cok<$ ~ { cok <@ O.s(); } ]
-}.
-
-module (Collision_Reduction_0 (A : AKE_Adversary) : BD.Adv) (O : BD.ASampler) = {
-  proc a() = {
-    Collision_Reduction_Oracles(O).init_mem(false);
-    Counter(Collision_Reduction_Oracles(O)).init_mem(false);
-    A(Counter(Collision_Reduction_Oracles(O))).run();
-  }
-}.
-
-module (Collision_Reduction_1 (A : AKE_Adversary) : BD.Adv) (O : BD.ASampler) = {
-  proc a() = {
-    Collision_Reduction_Oracles(O).init_mem(true);
-    Counter(Collision_Reduction_Oracles(O)).init_mem(true);
-    A(Counter(Collision_Reduction_Oracles(O))).run();
   }
 }.
 
@@ -247,13 +220,12 @@ module (Key_Delay_Reduction (D : AKE_Adversary) : KROc.RO_Distinguisher) (O : KR
 section.
 
 declare module A <: AKE_Adversary {
-  -AKE_Oracles,
+  -AKE_Oracles, -Counter,
   -AEAD_Oracles_0, -AEAD_Oracles_1,
   -PRF_Oracles_0, -PRF_Oracles_1,
   -AEAD_Reduction, -PRF_Reduction,
   -Nonce_Delay_Reduction, -NROc.RO, -NROc.FRO,
   -Key_Delay_Reduction, -KROc.RO, -KROc.FRO,
-  -Collision_Reduction_0, -Collision_Reduction_1, -BD.Sample,
   -Game1, -Game1a,
   -Game2,
   -Game3, -Game3a, -Game3b, -Game3c, -Game3d,
@@ -273,7 +245,7 @@ declare axiom A_ll:
   islossless A(O).run.
 
 declare axiom A_bounded_qs:
-  forall (O <: AKE_Oracles { -A }),
+  forall (O <: AKE_Oracles_i { -A }),
   hoare[A(Counter(O)).run:
         Counter.cm1 = 0 /\ Counter.cm2 = 0 /\ Counter.cm3 = 0
     ==> Counter.cm1 <= q_m1 /\ Counter.cm2 <= q_m2 /\ Counter.cm3 <= q_m3
@@ -341,24 +313,36 @@ match s with
 | Aborted   => s
 end.
 
+local lemma clean1_trace s: trace (clean1 s) = trace s.
+proof.
+by case s=> //; move=> [] //=.
+qed.
+
 local lemma clean1_fresh h sml smr:
   (forall h, omap (fun (v: _ * _) => let (r, s) = v in (r, clean1 s)) sml.[h] = smr.[h]) =>
   fresh h sml <=> fresh h smr.
 proof.
 move=> eq_sm.
-rewrite /fresh.
-have eq_ps : partners h sml = partners h smr.
-+ rewrite /partners.
-  congr.
-  apply fmap_eqP => h'.
-  rewrite !filterE -(eq_sm h') /=.
-  by case: (sml.[h']); smt().
-rewrite /observed_partners eq_ps.
-do! congr.
-rewrite fun_ext => h'.
-rewrite -(eq_sm h') //=.
-case: (sml.[h'])=> //.
-by move => [r' []] // [].
+rewrite /fresh /observed_partners.
+suff -> : partners h sml = partners h smr.
++ do! congr.
+  rewrite fun_ext => h'.
+  rewrite -(eq_sm h') //=.
+  case: (sml.[h'])=> //.
+  by move => [r' []] // [].
+rewrite fsetP=> h'.
+rewrite !mem_fdom !mem_filter /=.
+rewrite !fmapP.
+rewrite -(eq_sm h') -!(eq_sm h) /=.
+case: (sml.[h'])=> //=.
+move=> [r s].
+have -> : exists y, (r, s) = y by exists (r, s).
+have -> : exists y, (r, clean1 s) = y by exists (r, clean1 s).
+case: (sml.[h])=> /=.
++ by rewrite clean1_trace.
+move=> [r' s'] /=.
+rewrite !clean1_trace.
+by case s'.
 qed.
 
 lemma Hop2 bit &m:
@@ -736,7 +720,7 @@ qed.
 
 lemma Hop4 bit &m: `| Pr[AKE_Game(Game2, A).run(bit) @ &m : res] - Pr[AKE_Game(Game3, A).run(bit) @ &m : res] | <= Pr[AKE_Game(Game2, A).run(bit) @ &m : Game2.bad].
 proof.
-rewrite StdOrder.RealOrder.distrC.
+rewrite distrC.
 byequiv (: _ ==> _) : Game3.bad => //; first last.
 + move => &1 &2.
   by case: (Game2.bad{2}).
@@ -841,179 +825,117 @@ qed.
 (* ------------------------------------------------------------------------------------------ *)
 (* Step 2b: Bound the bad event. *)
 
-lemma Hop4_bound bit &m: Pr[AKE_Game(Game2, A).run(bit) @ &m : Game2.bad] <= ((q_m1 + q_m2 + q_m3) ^ 2)%r * mu1 dctxt (mode dctxt).
+lemma Hop4_bound bit &m: Pr[AKE_Game(Game2, A).run(bit) @ &m : Game2.bad] <= 1%r / 2%r * ((q_m1 + q_m2 + q_m3) * (q_m1 + q_m2 + q_m3 - 1))%r * p_max dctxt.
 proof.
-case (bit) => real_ideal.
+have ->: Pr[AKE_Game(Game2, A).run(bit) @ &m : Game2.bad]
+       = Pr[AKE_Game(Counter(Game2), A).run(bit) @ &m : Game2.bad /\ Counter.cm1 <= q_m1 /\ Counter.cm2 <= q_m2 /\ Counter.cm3 <= q_m3].
++ byequiv=> //.
+  proc; inline; sp.
+  conseq (: ==> ={Game2.bad}) _ (: Counter.cm1 = 0 /\ Counter.cm2 = 0 /\ Counter.cm3 = 0 ==> Counter.cm1 <= q_m1 /\ Counter.cm2 <= q_m2 /\ Counter.cm3 <= q_m3)=> //.
+  + by call (A_bounded_qs Game2).
+  by call (: ={glob Game2}); ~-1: by proc; inline; sim; auto.
+fel
+  1
+  (Counter.cm1 + Counter.cm2 + Counter.cm3)
+  (fun x => x%r * p_max dctxt)
+  (q_m1 + q_m2 + q_m3)
+  Game2.bad
+  [
+   Counter(Game2).send_msg1 : ((arg.`1, arg.`2) \notin Game2.state_map /\ (arg.`1, arg.`3) \in Game2.psk_map);
+   Counter(Game2).send_msg2 : ((arg.`1, arg.`2) \notin Game2.state_map
+                                 /\ (arg.`3.`1, arg.`1) \in Game2.psk_map
+                                 /\ (exists na, Game2.dec_map.[msg1_data arg.`3.`1 arg.`1, arg.`3.`2] = Some na));
+ Counter(Game2).send_msg3 : ((arg.`1, arg.`2) \in Game2.state_map
+                                 /\ (exists r s, (r, s) = oget Game2.state_map.[arg.`1, arg.`2]
+                                     /\ exists si m1, s = IPending si m1
+                                     /\ exists nb, Game2.dec_map.[msg2_data m1.`1 si.`1 m1.`2, arg.`3] = Some nb))
+  ]
+  (fsize Game2.dec_map <= Counter.cm1 + Counter.cm2 + Counter.cm3)
+  => //.
++ rewrite -mulr_suml StdBigop.Bigreal.sumidE.
+  + smt(ge0_q_m1 ge0_q_m2 ge0_q_m3).
+  smt().
++ smt().
++ inline; auto=> />.
+  by rewrite fsize_empty.
 
-(* Proof for the ideal side *)
-apply (StdOrder.RealOrder.ler_trans Pr[BD.Exp(BD.Sample, Collision_Reduction_1(A)).main() @ &m : !uniq BD.Sample.l]); first last.
-+ apply (BD.pr_collision_q2 (Collision_Reduction_1(A))).
-  + move => S S_ll.
-    islossless.
-    apply (A_ll (Counter(Collision_Reduction_Oracles(S)))); islossless.
-    + by match; auto; islossless.
-    + match; auto.
-      by sp; match; auto; islossless.
-    + match => //.
-      by sp; match; auto; islossless.
-    match => //; islossless.
-    by match; islossless.
++ proc; inline.
+  rcondt ^if; 1: by auto.
+  swap ^na<$ @ ^ca<$; wp.
+  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u).
+  move=> bd; auto=> &hr /> *.
+  split; last first.
+  + move=> _ v _ ad mem.
+    by exists (ad, v).
+  apply (ler_trans ((fsize Game2.dec_map{hr})%r * p_max dctxt)).
+  + apply Mu_mem.mu_mem_le_fsize.
+    move=> u _ /=.
+    exact pmax_upper_bound.
+  smt(pmax_ge0).
++ move=> c.
   proc; inline.
-  sp.
-  conseq (: _ ==> size BD.Sample.l <= Counter.cm1 + Counter.cm2 + Counter.cm3) (: Counter.cm1 = 0 /\ Counter.cm2 = 0 /\ Counter.cm3 = 0 ==> Counter.cm1 <= q_m1 /\ Counter.cm2 <= q_m2 /\ Counter.cm3 <= q_m3)=> //.
-  + smt().
-  + by call (A_bounded_qs (Collision_Reduction_Oracles(BD.Sample))).
-  call (: size BD.Sample.l <= Counter.cm1 + Counter.cm2 + Counter.cm3) => //.
-  + by proc; inline*; if; auto.
-  + by proc; inline*; sp; if => //; auto => /#.
-  + proc; inline*.
-    sp; if => //.
-    + case ((Collision_Reduction_Oracles.dec_map.[msg1_data a b, ca]) = None).
-      + match None ^match => //.
-        by auto => /#.
-      by match Some ^match => //; auto => /#.
-    by auto => /#.
-  + proc; inline*.
-    sp; if => //.
-    + sp; match; ~1: by auto => /#.
-      case ((Collision_Reduction_Oracles.dec_map.[msg2_data m1.`1 si.`1 m1.`2, m2]) = None).
-      + match None ^match => //.
-        + by auto => />.
-        by auto => /#.
-      by match Some ^match => //; auto => /#.
-    by auto => /#.
-  + by proc; inline*; auto => /#.
-  + by proc; inline*; auto => /#.
-  + proc; inline*; sp; if => //; sp; match => //.
-    by sp; if => //; sp; if => //; auto => /#.
+  rcondt ^if; 1: by auto.
+  auto=> />.
+  smt(fsize_set).
++ move=> b c.
+  proc; inline.
+  rcondf ^if; 1: by auto.
   by auto=> /#.
 
-byequiv => //.
-proc; inline.
-call (:
- ={b0, state_map, psk_map, bad, dec_map}(Game2, Collision_Reduction_Oracles(BD.Sample))
- /\ (Game2.bad{1} => !uniq BD.Sample.l{2})
- /\ (forall c, (exists ad, (ad, c) \in Collision_Reduction_Oracles.dec_map) => c \in BD.Sample.l){2}
-) => //.
-
-+ by sim />.
-
 + proc; inline.
-  sp; if => //; auto=> />.
-  smt(mem_set).
-
-+ proc; inline.
-  sp; if => //; 2: by auto => />.
-  sp; match = => //.
-  + by auto => />.
-  move => na.
-  auto => />.
-  smt(mem_set).
-
-+ proc; inline.
-  sp; if=> //; 2: by auto => />.
-  sp; match =; auto => />.
-  + smt().
-  + smt().
-  sp; match = => //.
-  + by auto => /#.
-  move => nb.
-  auto => />.
-  smt(mem_set).
-
-+ by sim />.
-
-+ by sim />.
-
-by sim />.
-
-auto => />.
-smt(emptyE).
-
-(* Proof for the real side *)
-apply (StdOrder.RealOrder.ler_trans Pr[BD.Exp(BD.Sample, Collision_Reduction_0(A)).main() @ &m : !uniq BD.Sample.l]); first last.
-+ apply (BD.pr_collision_q2 (Collision_Reduction_0(A))).
-  + move => S S_ll.
-    islossless.
-    apply (A_ll (Counter(Collision_Reduction_Oracles(S)))); islossless.
-    + by match; auto; islossless.
-    + match; auto.
-      by sp; match; auto; islossless.
-    + match => //.
-      by sp; match; auto; islossless.
-    match => //; islossless.
-    by match; islossless.
+  rcondt ^if; 1: by auto.
+  match Some ^match; 1: by auto.
+  swap ^nb<$ @ ^cb<$; wp.
+  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u).
+  move=> bd; auto=> &hr /> *.
+  split; last first.
+  + move=> _ v _ ad mem.
+    by exists (ad, v).
+  apply (ler_trans ((fsize Game2.dec_map{hr})%r * p_max dctxt)).
+  + apply Mu_mem.mu_mem_le_fsize.
+    move=> u _ /=.
+    exact pmax_upper_bound.
+  smt(pmax_ge0).
++ move=> c.
+  proc; inline.
+  rcondt ^if; 1: by auto.
+  match Some ^match; 1: by auto=> />.
+  auto=> />.
+  smt(fsize_set).
++ move=> b c.
   proc; inline.
   sp.
-  conseq (: _ ==> size BD.Sample.l <= Counter.cm1 + Counter.cm2 + Counter.cm3) (: Counter.cm1 = 0 /\ Counter.cm2 = 0 /\ Counter.cm3 = 0 ==> Counter.cm1 <= q_m1 /\ Counter.cm2 <= q_m2 /\ Counter.cm3 <= q_m3) => //.
-  + smt().
-  + by call (A_bounded_qs (Collision_Reduction_Oracles(BD.Sample))).
-  call (: size BD.Sample.l <= Counter.cm1 + Counter.cm2 + Counter.cm3) => //.
-  + by proc; inline*; if; auto.
-  + by proc; inline*; sp; if => //; auto => /#.
-  + proc; inline*.
-    sp; if => //.
-    + case ((Collision_Reduction_Oracles.dec_map.[msg1_data a b, ca]) = None).
-      + match None ^match => //.
-        auto => /#.
-      by match Some ^match => //; auto => /#.
-    by auto => /#.
-  + proc; inline*.
-    sp; if => //.
-    + sp; match; ~1: by auto => /#.
-      case ((Collision_Reduction_Oracles.dec_map.[msg2_data m1.`1 si.`1 m1.`2, m2]) = None).
-      + match None ^match => //.
-        + by auto => />.
-        by auto => /#.
-      by match Some ^match => //; auto => /#.
-    by auto => /#.
-  + by proc; inline*; auto => /#.
-  + by proc; inline*; auto => /#.
-  + proc; inline*; sp; if => //; sp; match => //.
-    by sp; if => //; sp; if => //; auto => /#.
-  by auto => /#.
+  if; last by auto=> /#.
+  by match None ^match; auto=> /#.
 
-byequiv => //.
++ proc; inline.
+  rcondt ^if; 1: by auto.
+  match IPending ^match; 1: by auto=> /#.
+  match Some ^match; 1: by auto=> /#.
+  swap ^nok<$ @ ^cok<$; wp.
+  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u).
+  move=> bd; auto=> &hr /> *.
+  split; last first.
+  + move=> _ v _ ad mem.
+    by exists (ad, v).
+  apply (ler_trans ((fsize Game2.dec_map{hr})%r * p_max dctxt)).
+  + apply Mu_mem.mu_mem_le_fsize.
+    move=> u _ /=.
+    exact pmax_upper_bound.
+  smt(pmax_ge0).
++ move=> c.
+  proc; inline.
+  rcondt ^if; 1: by auto.
+  match IPending ^match; 1: by auto=> /#.
+  match Some ^match; 1: by auto=> /#.
+  auto=> />.
+  smt(fsize_set).
+move=> b c.
 proc; inline.
-call (:
- ={b0, state_map, psk_map, bad, dec_map}(Game2, Collision_Reduction_Oracles(BD.Sample))
- /\ (Game2.bad{1} => !uniq BD.Sample.l{2})
- /\ (forall c, (exists ad, (ad, c) \in Collision_Reduction_Oracles.dec_map) => c \in BD.Sample.l){2}
-) => //.
-
-+ by sim />.
-
-+ proc; inline.
-  sp; if => //; auto=> />.
-  smt(mem_set).
-
-+ proc; inline.
-  sp; if => //; 2: by auto => />.
-  sp; match = => //.
-  + by auto => />.
-  move => na.
-  auto => />.
-  smt(mem_set).
-
-+ proc; inline.
-  sp; if=> //; 2: by auto => />.
-  sp; match =; auto => />.
-  + smt().
-  + smt().
-  sp; match = => //.
-  + by auto => /#.
-  move => nb.
-  auto => />.
-  smt(mem_set).
-
-+ by sim />.
-
-+ by sim />.
-
-by sim />.
-
-auto=> />.
-smt(emptyE).
+sp.
+if; last by auto=> /#.
+sp; match; ~1: by auto=> /#.
+by sp; match; auto=> /#.
 qed.
 
 (* ------------------------------------------------------------------------------------------ *)
@@ -1030,24 +952,36 @@ match s with
 | Aborted   => s
 end.
 
+local lemma clean2_trace s: trace (clean2 s) = trace s.
+proof.
+by case s=> //; move=> [] //=.
+qed.
+
 local lemma clean2_fresh h sml smr:
   (forall h, omap (fun (v: _ * _) => let (r, s) = v in (r, clean2 s)) sml.[h] = smr.[h]) =>
   fresh h sml <=> fresh h smr.
 proof.
 move=> eq_sm.
-rewrite /fresh.
-have eq_ps : partners h sml = partners h smr.
-+ rewrite /partners.
-  congr.
-  apply fmap_eqP => h'.
-  rewrite !filterE -(eq_sm h') /=.
-  by case: (sml.[h']); smt().
-rewrite /observed_partners eq_ps.
-do! congr.
-rewrite fun_ext => h'.
-rewrite -(eq_sm h') //=.
-case: (sml.[h'])=> //.
-by move => [r' []] // [].
+rewrite /fresh /observed_partners.
+suff -> : partners h sml = partners h smr.
++ do! congr.
+  rewrite fun_ext => h'.
+  rewrite -(eq_sm h') //=.
+  case: (sml.[h'])=> //.
+  by move => [r' []] // [].
+rewrite fsetP=> h'.
+rewrite !mem_fdom !mem_filter /=.
+rewrite !fmapP.
+rewrite -(eq_sm h') -!(eq_sm h) /=.
+case: (sml.[h'])=> //=.
+move=> [r s].
+have -> : exists y, (r, s) = y by exists (r, s).
+have -> : exists y, (r, clean2 s) = y by exists (r, clean2 s).
+case: (sml.[h])=> /=.
++ by rewrite clean2_trace.
+move=> [r' s'] /=.
+rewrite !clean2_trace.
+by case s'.
 qed.
 
 lemma Hop5 bit &m: Pr[AKE_Game(Game3, A).run(bit) @ &m : res] = Pr[AKE_Game(Game3a, A).run(bit) @ &m :res].
@@ -1747,21 +1681,36 @@ match s with
 | Aborted   => s
 end.
 
+local lemma clean3_trace s: trace (clean3 s) = trace s.
+proof.
+by case s=> //; move=> [] //=.
+qed.
+
 local lemma clean3_fresh h sml smr:
   (forall h, omap (fun (v: _ * _) => let (r, s) = v in (r, clean3 s)) sml.[h] = smr.[h]) =>
   fresh h sml <=> fresh h smr.
 proof.
 move=> eq_sm.
-rewrite /fresh.
-have eq_ps : partners h sml = partners h smr.
-+ rewrite /get_partners fsetP => h'.
-  by rewrite !mem_fdom !mem_filter !domE /#.
-rewrite /observed_partners eq_ps.
-do! congr.
-rewrite fun_ext => h'.
-rewrite -(eq_sm h') //=.
-case: (sml.[h'])=> //.
-by move => [r' []] // [].
+rewrite /fresh /observed_partners.
+suff -> : partners h sml = partners h smr.
++ do! congr.
+  rewrite fun_ext => h'.
+  rewrite -(eq_sm h') //=.
+  case: (sml.[h'])=> //.
+  by move => [r' []] // [].
+rewrite fsetP=> h'.
+rewrite !mem_fdom !mem_filter /=.
+rewrite !fmapP.
+rewrite -(eq_sm h') -!(eq_sm h) /=.
+case: (sml.[h'])=> //=.
+move=> [r s].
+have -> : exists y, (r, s) = y by exists (r, s).
+have -> : exists y, (r, clean3 s) = y by exists (r, clean3 s).
+case: (sml.[h])=> /=.
++ by rewrite clean3_trace.
+move=> [r' s'] /=.
+rewrite !clean3_trace.
+by case s'.
 qed.
 
 lemma Hop11 bit &m:
@@ -2064,9 +2013,9 @@ call (: ={state_map, psk_map, b0, dec_map, bad, prfkey_map, key_map}(Game5b, Gam
     smt().
   move => neq_role.
   have bj_partner : (a', i') \in partners h{2} Game5c.state_map{2}.
-  + rewrite /get_partners mem_fdom mem_filter /#.
+  + by rewrite /get_partners mem_fdom mem_filter domE smai' smai /= eq_sym.
   have // : (a', i') \in observed_partners h{2} Game5c.state_map{2}.
-  + rewrite /get_observed_partners in_filter /#.
+  + by rewrite /get_observed_partners in_filter /= smai' /(\o).
   rewrite fcard_eq0 in obs_ps.
   by rewrite obs_ps in_fset0.
 
@@ -2094,9 +2043,9 @@ call (: ={state_map, psk_map, b0, dec_map, bad, prfkey_map, key_map}(Game5b, Gam
     smt().
   move => neq_role.
   have bj_partner : (a', i') \in partners h{2} Game5c.state_map{2}.
-  + rewrite /get_partners mem_fdom mem_filter /#.
+  + by rewrite /get_partners mem_fdom mem_filter domE smai' smai /= eq_sym.
   have // : (a', i') \in observed_partners h{2} Game5c.state_map{2}.
-  + rewrite /get_observed_partners in_filter /#.
+  + by rewrite /get_observed_partners in_filter /= smai' /(\o).
   rewrite fcard_eq0 in obs_ps.
   by rewrite obs_ps in_fset0.
 
@@ -2140,33 +2089,37 @@ call (: ={state_map, psk_map, dec_map, bad, prfkey_map}(Game5c, Game5c)
 by auto => />.
 qed.
 
-lemma final &m: `| Pr[AKE_Game(AKE_Oracles(KAP1), A).run(false) @ &m : res] - Pr[AKE_Game(AKE_Oracles(KAP1), A).run(true) @ &m : res]|
+lemma Security &m: `| Pr[AKE_Game(AKE_Oracles(KAP1), A).run(false) @ &m : res] - Pr[AKE_Game(AKE_Oracles(KAP1), A).run(true) @ &m : res]|
   <= `|Pr[AEAD_Game(AEAD_Oracles_0, AEAD_Reduction(A)).run(false) @ &m : res] - Pr[AEAD_Game(AEAD_Oracles_1, AEAD_Reduction(A)).run(false) @ &m : res]|
       + `|Pr[AEAD_Game(AEAD_Oracles_0, AEAD_Reduction(A)).run(true) @ &m : res] - Pr[AEAD_Game(AEAD_Oracles_1, AEAD_Reduction(A)).run(true) @ &m : res]|
       + `|Pr[PRF_Game(PRF_Oracles_0, PRF_Reduction(A)).run(false) @ &m : res] - Pr[PRF_Game(PRF_Oracles_1, PRF_Reduction(A)).run(false) @ &m : res]|
       + `|Pr[PRF_Game(PRF_Oracles_0, PRF_Reduction(A)).run(true) @ &m : res] - Pr[PRF_Game(PRF_Oracles_1, PRF_Reduction(A)).run(true) @ &m : res]|
-      + 2%r * ((q_m1 + q_m2 + q_m3) ^ 2)%r * mu1 dctxt (mode dctxt).
+      + ((q_m1 + q_m2 + q_m3) * (q_m1 + q_m2 + q_m3 - 1))%r * p_max dctxt.
 proof.
 do rewrite Hop1 Hop2.
 do rewrite -Hop3 -Hop10.
 do rewrite -Hop9 -Hop8 -Hop7 -Hop6 -Hop5.
 do rewrite Hop11 Hop12 Hop13.
-apply (StdOrder.RealOrder.ler_trans
+apply (ler_trans
         (`|Pr[AKE_Game(Game1a, A).run(false) @ &m : res] - Pr[AKE_Game(Game2, A).run(false) @ &m : res]| +
          `|Pr[AKE_Game(Game1a, A).run(true) @ &m : res] - Pr[AKE_Game(Game2, A).run(true) @ &m : res]| +
          `|Pr[AKE_Game(Game2, A).run(false) @ &m : res] - Pr[AKE_Game(Game2, A).run(true) @ &m : res]|)).
-+ smt(StdOrder.RealOrder.ler_norm_add).
++ smt(ler_norm_add).
 have : `|Pr[AKE_Game(Game2, A).run(false) @ &m : res] -
   Pr[AKE_Game(Game2, A).run(true) @ &m : res]| <=
 `|Pr[AKE_Game(Game3, A).run(false) @ &m : res] -
   Pr[AKE_Game(Game5c, A).run(false) @ &m : res]| +
 `|Pr[AKE_Game(Game3, A).run(true) @ &m : res] -
   Pr[AKE_Game(Game5c, A).run(true) @ &m : res]| +
-2%r * ((q_m1 + q_m2 + q_m3) ^ 2)%r * mu1 dctxt (mode dctxt); last by smt(StdOrder.RealOrder.ler_add2l).
-apply (StdOrder.RealOrder.ler_trans
+  ((q_m1 + q_m2 + q_m3) * (q_m1 + q_m2 + q_m3 - 1))%r * p_max dctxt; last by smt(ler_add2l).
+apply (ler_trans
         (`|Pr[AKE_Game(Game3, A).run(false) @ &m : res] - Pr[AKE_Game(Game3, A).run(true) @ &m : res]| +
-2%r * ((q_m1 + q_m2 + q_m3) ^ 2)%r * mu1 dctxt (mode dctxt)
-)); 1: by smt(StdOrder.RealOrder.ler_norm_add Hop4 Hop4_bound).
-rewrite StdOrder.RealOrder.ler_add2r.
-smt(StdOrder.RealOrder.ler_norm_add Hop14).
+         ((q_m1 + q_m2 + q_m3) * (q_m1 + q_m2 + q_m3 - 1))%r * p_max dctxt
+)); 1: by smt(ler_norm_add Hop4 Hop4_bound).
+rewrite ler_add2r.
+smt(ler_norm_add Hop14).
 qed.
+
+end section.
+
+print Security.

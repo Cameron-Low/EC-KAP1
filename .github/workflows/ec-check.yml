@@ -1,42 +1,21 @@
-name: EC-NSL Verify Files
+name: EC-KAP1 Verify Files
 
 on:
   push:
     branches:
       - main
 
-env:
-  OPAMROOT: /home/charlie/.opam
-  OPAMYES: true
-  OPAMJOBS: 2
-  ECRJOBS: 1
-
 jobs:
   ec:
     name: Easycrypt Proof Checking
     runs-on: ubuntu-24.04
-    container:
-      image: ghcr.io/easycrypt/ec-build-box
     strategy:
       fail-fast: false
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/checkout@v4
-      name: Checkout EasyCrypt
-      with:
-        repository: EasyCrypt/easycrypt
-        ref: refs/tags/r2026.05
-        path: easycrypt
-    - name: Update OPAM & EasyCrypt dependencies
-      run: |
-        opam update
-        opam pin add -n easycrypt easycrypt
-        opam install --deps-only --depext-only --confirm-level=unsafe-yes easycrypt
-        opam install --deps-only easycrypt
-    - name: Compile & Install EasyCrypt
-      run: opam install easycrypt
-    - name: Detect SMT provers
-      run: |
-        opam exec -- easycrypt why3config -why3 ~/.why3.conf
+    - uses: actions/checkout@v6
     - name: Compile Project
-      run: opam exec -- make check
+      run: |
+        docker run \
+          -v .:/home/charlie/project:Z \
+          ghcr.io/easycrypt/ec-test-box:release \
+          sh -c "opam exec -- make -C project check"
