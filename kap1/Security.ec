@@ -837,7 +837,7 @@ have ->: Pr[AKE_Game(Game2, A).run(bit) @ &m : Game2.bad]
 fel
   1
   (Counter.cm1 + Counter.cm2 + Counter.cm3)
-  (fun x => x%r * p_max dctxt)
+  (fun x => (max 0 x)%r * p_max dctxt)
   (q_m1 + q_m2 + q_m3)
   Game2.bad
   [
@@ -852,7 +852,9 @@ fel
   ]
   (fsize Game2.dec_map <= Counter.cm1 + Counter.cm2 + Counter.cm3)
   => //.
-+ rewrite -mulr_suml StdBigop.Bigreal.sumidE.
++ rewrite (eq_big_int _ _ _ (fun x => x%r * p_max dctxt)).
+  + by move=> x [ge0x _] /=; smt().
+  rewrite -mulr_suml StdBigop.Bigreal.sumidE.
   + smt(ge0_q_m1 ge0_q_m2 ge0_q_m3).
   smt().
 + smt().
@@ -862,7 +864,7 @@ fel
 + proc; inline.
   rcondt ^if; 1: by auto.
   swap ^na<$ @ ^ca<$; wp.
-  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u); last by admit. (* FIXME pHL: add pre to bound check, \all m, **\phi m ->** 0 <= bnd *)
+  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u); last by move=> &hr; smt(pmax_ge0).
   move=> bd; auto=> &hr /> *.
   split; last first.
   + move=> _ v _ ad mem.
@@ -871,7 +873,7 @@ fel
   + apply Mu_mem.mu_mem_le_fsize.
     move=> u _ /=.
     exact pmax_upper_bound.
-  smt(pmax_ge0).
+  by apply ler_wpmul2r; [exact pmax_ge0 | rewrite le_fromint /#].
 + move=> c.
   proc; inline.
   rcondt ^if; 1: by auto.
@@ -886,7 +888,7 @@ fel
   rcondt ^if; 1: by auto.
   match Some ^match; 1: by auto.
   swap ^nb<$ @ ^cb<$; wp.
-  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u); last by admit. (* FIXME pHL: add pre to bound check, \all m, **\phi m ->** 0 <= bnd *)
+  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u); last by move=> &hr; smt(pmax_ge0).
   move=> bd; auto=> &hr /> *.
   split; last first.
   + move=> _ v _ ad mem.
@@ -895,7 +897,7 @@ fel
   + apply Mu_mem.mu_mem_le_fsize.
     move=> u _ /=.
     exact pmax_upper_bound.
-  smt(pmax_ge0).
+  by apply ler_wpmul2r; [exact pmax_ge0 | rewrite le_fromint /#].
 + move=> c.
   proc; inline.
   rcondt ^if; 1: by auto.
@@ -913,7 +915,7 @@ fel
   match IPending ^match; 1: by auto=> /#.
   match Some ^match; 1: by auto=> /#.
   swap ^nok<$ @ ^cok<$; wp.
-  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u); last by admit. (* FIXME pHL: add pre to bound check, \all m, **\phi m ->** 0 <= bnd *)
+  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u); last by move=> &hr; smt(pmax_ge0).
   move=> bd; auto=> &hr /> *.
   split; last first.
   + move=> _ v _ ad mem.
@@ -922,7 +924,7 @@ fel
   + apply Mu_mem.mu_mem_le_fsize.
     move=> u _ /=.
     exact pmax_upper_bound.
-  smt(pmax_ge0).
+  by apply ler_wpmul2r; [exact pmax_ge0 | rewrite le_fromint /#].
 + move=> c.
   proc; inline.
   rcondt ^if; 1: by auto.
