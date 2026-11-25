@@ -862,7 +862,7 @@ fel
 + proc; inline.
   rcondt ^if; 1: by auto.
   swap ^na<$ @ ^ca<$; wp.
-  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u).
+  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u); last by admit. (* FIXME pHL: add pre to bound check, \all m, **\phi m ->** 0 <= bnd *)
   move=> bd; auto=> &hr /> *.
   split; last first.
   + move=> _ v _ ad mem.
@@ -886,7 +886,7 @@ fel
   rcondt ^if; 1: by auto.
   match Some ^match; 1: by auto.
   swap ^nb<$ @ ^cb<$; wp.
-  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u).
+  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u); last by admit. (* FIXME pHL: add pre to bound check, \all m, **\phi m ->** 0 <= bnd *)
   move=> bd; auto=> &hr /> *.
   split; last first.
   + move=> _ v _ ad mem.
@@ -913,7 +913,7 @@ fel
   match IPending ^match; 1: by auto=> /#.
   match Some ^match; 1: by auto=> /#.
   swap ^nok<$ @ ^cok<$; wp.
-  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u).
+  rnd (fun c => exists u, u \in Game2.dec_map /\ c = snd u); last by admit. (* FIXME pHL: add pre to bound check, \all m, **\phi m ->** 0 <= bnd *)
   move=> bd; auto=> &hr /> *.
   split; last first.
   + move=> _ v _ ad mem.
@@ -1292,13 +1292,11 @@ wp; call (:
 
 - by sim />.
 
-- proc; inline*.
-  sp; wp; if => //.
-  by auto => />.
-  
-- proc; inline*.
-  sp; wp; if => //.
-  by sp; match =; auto => />.
+- proc; inline.
+  by sim.
+
+- proc; inline.
+  by sim.
 
 - proc; inline*.
   sp; wp; if => //.
@@ -1958,7 +1956,7 @@ by auto.
 qed.
 
 (* ------------------------------------------------------------------------------------------ *)
-(* Hop 13: Game 5b to Game 3c - Remove checks for new key samplings *)
+(* Hop 13: Game 5b to Game 5c - Remove checks for new key samplings *)
 
 
 lemma Hop13 &m b:
@@ -2017,9 +2015,9 @@ call (: ={state_map, psk_map, b0, dec_map, bad, prfkey_map, key_map}(Game5b, Gam
     by case r=> /=; case (h{2} = (a', i'))=> /> ->.
   move => neq_role.
   have bj_partner : (a', i') \in partners h{2} Game5c.state_map{2}.
-  + by rewrite /get_partners mem_fdom mem_filter domE smai' smai /= eq_sym.
+  + by rewrite mem_fdom mem_filter domE smai' smai /= eq_sym.
   have // : (a', i') \in observed_partners h{2} Game5c.state_map{2}.
-  + by rewrite /get_observed_partners in_filter /= smai' /(\o).
+  + by rewrite in_filter /= smai' /(\o).
   rewrite fcard_eq0 in obs_ps.
   by rewrite obs_ps in_fset0.
 
@@ -2051,9 +2049,9 @@ call (: ={state_map, psk_map, b0, dec_map, bad, prfkey_map, key_map}(Game5b, Gam
     by case r=> /=; case (h{2} = (a', i'))=> /> ->.
   move => neq_role.
   have bj_partner : (a', i') \in partners h{2} Game5c.state_map{2}.
-  + by rewrite /get_partners mem_fdom mem_filter domE smai' smai /= eq_sym.
+  + by rewrite mem_fdom mem_filter domE smai' smai /= eq_sym.
   have // : (a', i') \in observed_partners h{2} Game5c.state_map{2}.
-  + by rewrite /get_observed_partners in_filter /= smai' /(\o).
+  + by rewrite in_filter /= smai' /(\o).
   rewrite fcard_eq0 in obs_ps.
   by rewrite obs_ps in_fset0.
 

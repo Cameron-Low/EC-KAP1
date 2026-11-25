@@ -390,23 +390,18 @@ module Game5b = Game5a with {
     }
   ]
   proc test [
-    ^if.^match#Accepted.^if.1 ~ {
+    ^if.^match#Accepted.^if.1 + ^ {
       k' <$ dskey;
       if (t \notin key_map) {
         key_map.[t] <- k';
-      }
-      if (b0 = false) {
-        k' <- oget key_map.[t];
-      } else {
-        k' <$ dskey;
       }
     }
   ]
 }.
 
 module Game5c = Game5b with {
-  proc reveal [^if.^match#Accepted.^if.^if ~ { key_map.[t] <- k'; }]
-  proc test [^if.^match#Accepted.^if.^if ~ { key_map.[t] <- k'; }]
+  proc reveal [^if.^match#Accepted.^if.^if - .]
+  proc test [^if.^match#Accepted.^if.^if - .]
 }.
 
 (* ------------------------------------------------------------------------------------------ *)
@@ -780,29 +775,21 @@ op Game3d_inv
   (dm : (msg_data * ctxt, nonce) fmap)
   (nm : (msg_data * ctxt, nonce) fmap)
 =
-  (* Unicity of pending initiators *)
-  (forall a i j c c' r r' b b' psk psk' na na' m1,
-       sm.[(a, i)] = Some (r, IPending (b, psk, na, c) m1)
-    => sm.[(a, j)] = Some (r', IPending (b', psk', na', c') m1)
-    => i = j)
+  (* Simple event orderings *)
+  (forall m1 a b, (msg1_data a b, m1) \in nm => (msg1_data a b, m1) \in dm)
+  /\ (forall m1 a b m2 m3, (msg3_data a b m1 m2, m3) \in dm => (msg2_data a b m1, m2) \in nm)
+  /\ (forall m1 a b m2, (msg2_data a b m1, m2) \in nm => (msg1_data a b, m1) \in nm)
 
-  (* Pending initiator state relationships *)
-  /\ (forall a i r b psk na c1 m1,
-        sm.[a, i] = Some (r, IPending (b, psk, na, c1) m1)
-        => a = m1.`1
-        /\ (msg1_data m1.`1 b, m1.`2) \in dm
-        /\ forall c2 c3, (msg3_data m1.`1 b m1.`2 c2, c3) \notin dm)
+  (* The key transition *)
+  /\ (forall h r s a b c m1, sm.[h] = Some (r, IPending s (a, m1)) => (msg1_data b c, m1) \notin nm)
 
-  /\ (forall a b m1 m2 m3, (msg3_data a b m1 m2, m3) \in dm
-      => (msg1_data a b, m1) \in nm /\ (msg2_data a b m1, m2) \in nm)
-
-  /\ (forall a b m1, (msg1_data a b, m1) \in nm
-      => exists m2 m3, (msg3_data a b m1 m2, m3) \in dm)
-
-  /\ (forall a b m1 m2, (msg2_data a b m1, m2) \in nm
-      => exists m3, (msg3_data a b m1 m2, m3) \in dm)
-
-  /\ (forall a b ca cb caf, (msg3_data a b ca cb, caf) \in dm => (msg1_data a b, ca) \in dm).
+  (* Identifying this transition as unique *)
+  /\ (forall h h' r r' s s' a a' m1,
+       sm.[h] = Some (r, IPending s (a, m1))
+    => sm.[h'] = Some (r', IPending s' (a', m1))
+    => h = h')
+  (* Needed to show contradiction for proof of uniqueness *)
+  /\ (forall h r s a m1, sm.[h] = Some (r, IPending s (a, m1)) => (msg1_data a s.`1, m1) \in dm).
 
 hoare Game3d_inv_send_msg1: Game3d.send_msg1:
   (Game3d_inv Game3d.state_map Game3d.dec_map Game3d.nonce_map)
@@ -815,18 +802,9 @@ seq 1 : (#pre); 1: by auto.
 case (Game3d.bad).
 + by rcondf ^if; auto=> />.
 auto=> />.
-move => &m *.
-do split; ~1: smt(get_setE).
-move => a0 i0 j c r r' b0 b' psk psk' na0 na' m1 m1'.
-rewrite !get_setE.
-case ((a0, i0) = (a, i){m}).
-+ case ((a0, j) = (a, i){m}) => //.
-  smt(get_setE).
-case ((a0, j) = (a, i){m}) => //. 
-+ move => />.
-  smt(get_setE).
-smt().
-qed.
+smt(get_setE).
+qed
+.
 
 hoare Game3d_inv_send_msg2: Game3d.send_msg2:
   (Game3d_inv Game3d.state_map Game3d.dec_map Game3d.nonce_map)
@@ -931,14 +909,14 @@ op Game5c_inv
     => h = h')
 
 (* Session state well-formedness and log relationship *)
-/\ (forall a i r b psk na c1 m1,
-      sm.[a, i] = Some (r, IPending (b, psk, na, c1) m1)
-      => (msg1_data m1.`1 b, m1.`2) \in dm
+/\ (forall a i r s m1,
+      sm.[a, i] = Some (r, IPending s m1)
+      => (exists ad, (ad, m1.`2) \in dm)
       /\ r = Initiator /\ m1.`1 = a)
 
-/\ (forall b j r a psk na nb c1 c2 m1 m2,
-      sm.[b, j] = Some (r, RPending (a, psk, na, nb, c1, c2) m1 m2)
-      => (msg1_data m1.`1 b, m1.`2) \in dm /\ (msg2_data m1.`1 b m1.`2, m2) \in dm
+/\ (forall b j r s m1 m2,
+      sm.[b, j] = Some (r, RPending s m1 m2)
+      => (exists ad, (ad, m1.`2) \in dm) /\ (exists ad, (ad, m2) \in dm)
       /\ r = Responder)
 
 /\ (forall a i r b m1 m2 m3 sk,

@@ -1,6 +1,6 @@
 # PSK-NSL final proof
 
-To run, either install EasyCrypt release 2026.06 and the associated SMT
+To run, either install EasyCrypt release 2026.10 and the associated SMT
 solvers:
 - Alt Ergo 2.6
 - Z3 4.13
